@@ -1,10 +1,12 @@
 import os
-import fitz
+import fitz  # PyMuPDF
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, davies_bouldin_score
-import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
 
 def read_pdf(file_path):
     document = fitz.open(file_path)
@@ -16,73 +18,51 @@ def read_pdf(file_path):
 
 def read_pdfs_from_directory(directory):
     abstracts = []
+    filenames = []  # Store filenames for labeling in the plot
     for f in os.listdir(directory):
         if f.endswith(".pdf"):
-            abstracts.append(read_pdf(os.path.join(directory, f)))
-    if len(abstracts) == 0:
+            full_path = os.path.join(directory, f)
+            abstracts.append(read_pdf(full_path))
+            filenames.append(f)  # Capture filename without path
+    if not abstracts:
         raise ValueError("No PDF files found in the specified directory.")
-    return abstracts
+    return abstracts, filenames
 
 def fit_tfidf_vectorizer(abstracts):
     vectorizer = TfidfVectorizer(stop_words="english")
     tfidf_vectors = vectorizer.fit_transform(abstracts)
-    return tfidf_vectors, tfidf_vectors.toarray()  # Return both sparse and dense versions
+    return tfidf_vectors
 
-def determine_optimal_clusters(tfidf_vectors, max_clusters):
-    sse = []
-    silhouette_scores = []
-    davies_bouldin_scores = []
-    for k in range(2, max_clusters + 1):
-        kmeans = KMeans(n_clusters=k, random_state=42)
-        kmeans.fit(tfidf_vectors)
-        sse.append(kmeans.inertia_)
-        silhouette_scores.append(silhouette_score(tfidf_vectors, kmeans.labels_))
-        davies_bouldin_scores.append(davies_bouldin_score(tfidf_vectors.toarray(), kmeans.labels_))
-    return sse, silhouette_scores, davies_bouldin_scores
+def perform_clustering(tfidf_vectors, n_clusters=17):  # Set default based on previous determination
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    labels = kmeans.fit_predict(tfidf_vectors)
+    return labels, kmeans
 
-def plot_cluster_metrics(range_clusters, sse, silhouette_scores, davies_bouldin_scores):
-    plt.figure(figsize=(21, 7))
-    plt.subplot(1, 3, 1)
-    plt.plot(range_clusters, sse, marker="o")
-    plt.xlabel("Number of Clusters")
-    plt.ylabel("SSE (Sum of Squared Errors)")
-    plt.title("Elbow Method for Optimal Clusters")
+import plotly.express as px
+from sklearn.manifold import TSNE
 
-    plt.subplot(1, 3, 2)
-    plt.plot(range_clusters, silhouette_scores, marker="o")
-    plt.xlabel("Number of Clusters")
-    plt.ylabel("Silhouette Score")
-    plt.title("Silhouette Score for Optimal Clusters")
+def visualize_tsne_interactive(tfidf_vectors, labels, filenames):
+    tsne = TSNE(n_components=2, random_state=42)
+    tsne_results = tsne.fit_transform(tfidf_vectors.toarray())
+    
+    df_tsne = pd.DataFrame(tsne_results, columns=['t-SNE 1', 't-SNE 2'])
+    df_tsne['labels'] = labels
+    df_tsne['titles'] = filenames  # Assuming 'filenames' list has titles or relevant identifiers
 
-    plt.subplot(1, 3, 3)
-    plt.plot(range_clusters, davies_bouldin_scores, marker="o")
-    plt.xlabel("Number of Clusters")
-    plt.ylabel("Davies-Bouldin Index")
-    plt.title("Davies-Bouldin Index for Optimal Clusters")
+    fig = px.scatter(df_tsne, x='t-SNE 1', y='t-SNE 2', color='labels', hover_data=['titles'])
+    fig.update_traces(marker=dict(size=5, opacity=0.6),
+                      selector=dict(mode='markers'))
+    fig.show()
 
-    plt.tight_layout()
-    plt.show()
 
-def perform_clustering_and_evaluate(tfidf_vectors, optimal_clusters):
-    kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
-    kmeans.fit(tfidf_vectors)
-    silhouette_avg = silhouette_score(tfidf_vectors, kmeans.labels_)
-    davies_bouldin_avg = davies_bouldin_score(tfidf_vectors.toarray(), kmeans.labels_)
-    return kmeans.labels_, silhouette_avg, davies_bouldin_avg
+
 
 def main():
     pdf_dir = "pdf"
-    abstracts = read_pdfs_from_directory(pdf_dir)
-    tfidf_vectors, tfidf_dense = fit_tfidf_vectorizer(abstracts)
-    sse, silhouette_scores, davies_bouldin_scores = determine_optimal_clusters(tfidf_vectors, min(25, len(abstracts)))
-    plot_cluster_metrics(range(2, min(25, len(abstracts)) + 1), sse, silhouette_scores, davies_bouldin_scores)
-    optimal_clusters = 17  # Based on visual inspection of plots
-    labels, silhouette_avg, davies_bouldin_avg = perform_clustering_and_evaluate(tfidf_vectors, optimal_clusters)
-    print(f"Optimal number of clusters: {optimal_clusters}")
-    print(f"Silhouette Score: {silhouette_avg}")
-    print(f"Davies-Bouldin Index: {davies_bouldin_avg}")
-    for i, label in enumerate(labels):
-        print(f"Abstract {i} is in cluster {label}")
+    abstracts, filenames = read_pdfs_from_directory(pdf_dir)
+    tfidf_vectors = fit_tfidf_vectorizer(abstracts)
+    labels, kmeans = perform_clustering(tfidf_vectors)
+    visualize_tsne_interactive(tfidf_vectors, labels, filenames)
 
 if __name__ == "__main__":
     main()

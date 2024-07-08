@@ -1,11 +1,11 @@
 import os
-import fitz
+import csv
+import fitz  # PyMuPDF
 import numpy as np
 import matplotlib.pyplot as plt
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, davies_bouldin_score
-
 
 def read_pdf(file_path):
     document = fitz.open(file_path)
@@ -15,13 +15,23 @@ def read_pdf(file_path):
         text += page.get_text()
     return text
 
+# Function to write cluster assignments to a CSV file
+def write_clusters_to_csv(filenames, labels, file_path='wordE_kmean.csv'):
+    with open(file_path, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Filename', 'Cluster'])
+        for filename, label in zip(filenames, labels):
+            writer.writerow([filename, label])
 
 # Load PDF files and extract text
 abstracts = []
+filenames = []  # List to store filenames
 pdf_dir = "pdf"  # Directory containing the PDF files
 for f in os.listdir(pdf_dir):
     if f.endswith(".pdf"):  # Ensure we only process PDF files
-        abstracts.append(read_pdf(os.path.join(pdf_dir, f)))
+        full_path = os.path.join(pdf_dir, f)
+        abstracts.append(read_pdf(full_path))
+        filenames.append(f)  # Store the filename
 
 # Check if abstracts were extracted
 if len(abstracts) == 0:
@@ -38,9 +48,7 @@ sse = []
 silhouette_scores = []
 davies_bouldin_scores = []
 
-max_clusters = min(
-    25, len(abstracts)
-)  # Ensure max_clusters does not exceed the number of samples
+max_clusters = min(25, len(abstracts))  # Ensure max_clusters does not exceed the number of samples
 for k in range(2, max_clusters + 1):  # Silhouette score requires at least 2 clusters
     kmeans = KMeans(n_clusters=k, random_state=42)
     kmeans.fit(embeddings)
@@ -50,7 +58,6 @@ for k in range(2, max_clusters + 1):  # Silhouette score requires at least 2 clu
 
 # Plot the elbow curve, silhouette scores, and Davies-Bouldin scores
 plt.figure(figsize=(21, 7))
-
 plt.subplot(1, 3, 1)
 plt.plot(range(2, max_clusters + 1), sse, marker="o")
 plt.xlabel("Number of Clusters")
@@ -73,21 +80,14 @@ plt.tight_layout()
 plt.show()
 
 # Choose the optimal number of clusters (e.g., from the plots)
-optimal_clusters = 10  # Adjust this value based on the plots
-
-# Fit the KMeans model with the optimal number of clusters
+optimal_clusters = 11  # Adjust this value based on the plots
 kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
 kmeans.fit(embeddings)
 
-# Evaluate the quality of the clustering
-silhouette_avg = silhouette_score(embeddings, kmeans.labels_)
-davies_bouldin_avg = davies_bouldin_score(embeddings, kmeans.labels_)
+# Output the filename and cluster assignments to CSV
+write_clusters_to_csv(filenames, kmeans.labels_)
 
 print(f"Optimal number of clusters: {optimal_clusters}")
-print(f"Silhouette Score: {silhouette_avg}")
-print(f"Davies-Bouldin Index: {davies_bouldin_avg}")
-
-# Print the resulting clusters
-labels = kmeans.labels_
-for i, abstract in enumerate(abstracts):
-    print(f"Abstract {i} is in cluster {labels[i]}")
+print(f"Silhouette Score: {silhouette_score(embeddings, kmeans.labels_)}")
+print(f"Davies-Bouldin Index: {davies_bouldin_score(embeddings, kmeans.labels_)}")
+print(f"Cluster assignments have been saved to 'wordE_kmean.csv'")

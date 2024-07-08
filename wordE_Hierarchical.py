@@ -48,8 +48,31 @@ plt.xlabel('Sample index')
 plt.ylabel('Distance')
 plt.show()
 
+# Plot the elbow curve, silhouette scores, and Davies-Bouldin scores
+plt.figure(figsize=(21, 7))
+plt.subplot(1, 3, 1)
+plt.plot(range(2, max_clusters + 1), sse, marker="o")
+plt.xlabel("Number of Clusters")
+plt.ylabel("SSE (Sum of Squared Errors)")
+plt.title("Elbow Method for Optimal Clusters")
+
+plt.subplot(1, 3, 2)
+plt.plot(range(2, max_clusters + 1), silhouette_scores, marker="o")
+plt.xlabel("Number of Clusters")
+plt.ylabel("Silhouette Score")
+plt.title("Silhouette Score for Optimal Clusters")
+
+plt.subplot(1, 3, 3)
+plt.plot(range(2, max_clusters + 1), davies_bouldin_scores, marker="o")
+plt.xlabel("Number of Clusters")
+plt.ylabel("Davies-Bouldin Index")
+plt.title("Davies-Bouldin Index for Optimal Clusters")
+
+plt.tight_layout()
+plt.show()
+
 # Perform Agglomerative Hierarchical Clustering
-n_clusters = 16  # Adjust this number based on your data
+n_clusters = 11  # Adjust this number based on your data
 agglomerative = AgglomerativeClustering(n_clusters=n_clusters)
 labels = agglomerative.fit_predict(embeddings)
 
